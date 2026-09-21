@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OT Plan - ระบบบันทึกและติดตามชั่วโมงการทำงาน</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter & Anuphan -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (xlsx) for Excel Export/Import -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Anuphan', 'Inter', sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            overflow-x: hidden;
+            margin: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #wrapper {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Sidebar Styling */
+        #sidebar {
+            width: 260px;
+            background: #1e293b;
+            color: #fff;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 1050;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #sidebar.collapsed {
+            width: 70px;
+        }
+
+        #sidebar .sidebar-header {
+            padding: 20px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            white-space: nowrap;
+            overflow: hidden;
+            height: 65px;
+        }
+
+        #sidebar.collapsed .sidebar-header span {
+            display: none;
+        }
+
+        #sidebar .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        #sidebar .sidebar-menu li a {
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            font-size: 0.95rem;
+        }
+
+        #sidebar .sidebar-menu li a:hover,
+        #sidebar .sidebar-menu li.active a {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            border-left: 4px solid #3b82f6;
+        }
+
+        #sidebar .sidebar-menu li a i {
+            font-size: 1.15rem;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        #sidebar.collapsed .sidebar-menu li a span {
+            display: none;
+        }
+
+        /* Content Viewport */
+        #content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            background: #f8fafc;
+            width: calc(100vw - 260px);
+        }
+
+        .top-navbar {
+            height: 65px;
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            flex-shrink: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .main-viewport {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Cards & Tables */
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            background: #ffffff;
+            margin-bottom: 20px;
+        }
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 8px;
+        }
+
+        .table td, .table th {
+            white-space: nowrap;
+            vertical-align: middle;
+            font-size: 0.88rem;
+            padding: 10px 12px;
+        }
+
+        /* Mobile Sidebar Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1040;
+            backdrop-filter: blur(2px);
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+
+        /* Responsive Media Queries */
+        @media (max-width: 992px) {
+            #sidebar {
+                position: fixed;
+                height: 100%;
+                left: -260px;
+            }
+            #sidebar.mobile-show {
+                left: 0;
+            }
+            #content {
+                width: 100vw;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .main-viewport {
+                padding: 12px;
+            }
+            .top-navbar {
+                padding: 0 12px;
+            }
+            h5.fs-6, h6 {
+                font-size: 0.95rem !important;
+            }
+            .btn-sm {
+                padding: 0.35rem 0.6rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+    <div id="wrapper">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar">
+            <div class="sidebar-header">
+                <span><i class="fas fa-chart-line me-2 text-primary"></i>OT Plan Tracker</span>
+                <button class="btn btn-sm text-white p-0 d-none d-lg-block" id="sidebarToggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="active" id="menu-dashboard">
+                    <a href="#" onclick="switchTab('dashboard')">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>แดชบอร์ดและกราฟ</span>
+                    </a>
+                </li>
+                <li id="menu-crud">
+                    <a href="#" onclick="switchTab('crud')">
+                        <i class="fas fa-users-cog"></i>
+                        <span>บันทึกเวลา OT รายวัน</span>
+                    </a>
+                </li>
+                <li id="menu-masteremp">
+                    <a href="#" onclick="switchTab('masteremp')">
+                        <i class="fas fa-id-card"></i>
+                        <span>ข้อมูลพนักงาน (Master)</span>
+                    </a>
+                </li>
+                <li id="menu-workingdays">
+                    <a href="#" onclick="switchTab('workingdays')">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>ตั้งค่าวันทำงานรายเดือน</span>
+                    </a>
+                </li>
+                <li id="menu-deptobg">
+                    <a href="#" onclick="switchTab('deptobg')">
+                        <i class="fas fa-building"></i>
+                        <span>ตั้งค่า OBG แยกแผนก</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Content Area -->
+        <div id="content">
+            <!-- Top Navbar -->
+            <div class="top-navbar">
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-outline-secondary btn-sm me-3 d-lg-none" onclick="toggleMobileSidebar()"><i class="fas fa-bars"></i></button>
+                    <h5 class="mb-0 text-dark fw-bold fs-6 fs-md-5" id="pageTitle">แดชบอร์ดภาพรวมชั่วโมงการทำงาน</h5>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small d-none d-sm-inline-block"><i class="fas fa-cloud-check me-1"></i>เชื่อมต่อฐานข้อมูลแล้ว</span>
+                </div>
+            </div>
+
+            <!-- Viewport Container -->
+            <div class="main-viewport">
+
+                <!-- TAB 1: DASHBOARD & CHARTS -->
+                <div id="tabDashboard" class="tab-content-section">
+                    <div class="card p-3 mb-3 bg-white">
+                        <div class="row align-items-center g-2">
+                            <div class="col-12 col-md-6">
+                                <h6 class="text-primary fw-bold mb-0"><i class="fas fa-filter me-2"></i>เลือกเดือนเพื่อดูภาพรวมและกราฟ</h6>
+                            </div>
+                            <div class="col-12 col-md-6 text-md-end">
+                                <div class="d-inline-flex align-items-center w-100 justify-content-md-end">
+                                    <label for="globalMonthSelect" class="form-label small mb-0 me-2 fw-semibold text-muted text-nowrap">รอบเดือน:</label>
+                                    <select id="globalMonthSelect" class="form-select form-select-sm" style="max-width: 220px;" onchange="onMonthChange()">
+                                        <!-- Rendered by JS -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3" id="summaryCards">
+                        <!-- Rendered by JS -->
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-lg-8">
+                            <div class="card p-3 h-100">
+                                <h6 class="text-muted fw-bold mb-3 small">เปรียบเทียบชั่วโมง OBG (Budget) กับ Actual แยกตามแผนก</h6>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="barChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <div class="card p-3 h-100">
+                                <h6 class="text-muted fw-bold mb-3 small">สัดส่วนจำนวนพนักงานแต่ละแผนก</h6>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="pieChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <div class="card p-3">
+                                <h6 class="text-muted fw-bold mb-3 small">เปรียบเทียบ Feas. Plan กับ Actual (Total) แยกตามรายชื่อพนักงาน</h6>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="employeeEmpChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: CRUD MANAGEMENT (OT Records) -->
+                <div id="tabCrud" class="tab-content-section d-none">
+                    <div class="card mb-3">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0 text-primary fs-6 fw-bold"><i class="fas fa-users me-2"></i>บันทึกเวลา OT รายวันของพนักงาน</h5>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-success btn-sm" onclick="exportToExcel()">
+                                    <i class="fas fa-file-excel me-1"></i> Excel
+                                </button>
+                                <label class="btn btn-outline-primary btn-sm mb-0" style="cursor: pointer;">
+                                    <i class="fas fa-file-upload me-1"></i> อัปโหลด
+                                    <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" onchange="importFromExcel(event)" style="display: none;">
+                                </label>
+                                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#employeeModal" onclick="openAddModal()">
+                                    <i class="fas fa-user-plus me-1"></i> บันทึกเวลา
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="row g-2 mb-3">
+                                <div class="col-12 col-md-6">
+                                    <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="ค้นหารหัส, ชื่อ, นามสกุล..." onkeyup="renderTable()">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <select id="filterSection" class="form-select form-select-sm" onchange="renderTable()">
+                                        <option value="">-- ทุกแผนก (Section) --</option>
+                                        <option value="Production Control Admin">Production Control Admin</option>
+                                        <option value="Production Operation Control 1">Production Operation Control 1</option>
+                                        <option value="Production Operation Control 2">Production Operation Control 2</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive border rounded">
+                                <table class="table table-bordered table-hover align-middle text-center mb-0 bg-white" style="font-size: 0.88rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Month</th>
+                                            <th>รหัส</th>
+                                            <th>ชื่อ - นามสกุล</th>
+                                            <th>แผนก (Section)</th>
+                                            <th>กะ / ตำแหน่ง</th>
+                                            <th>OBG (Total)</th>
+                                            <th>Feas. Plan</th>
+                                            <th>Actual (Total)</th>
+                                            <th>Diff</th>
+                                            <th>Ratio (OBG)</th>
+                                            <th>Ratio (Act)</th>
+                                            <th>Detail (เหตุผลรายวัน)</th>
+                                            <th>จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="employeeTableBody">
+                                        <!-- Data rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: MASTER EMPLOYEE DATA PAGE -->
+                <div id="tabMasterEmp" class="tab-content-section d-none">
+                    <div class="card mb-3">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0 text-primary fs-6 fw-bold"><i class="fas fa-id-card me-2"></i>ข้อมูลพนักงาน (Master Directory)</h5>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#masterEmpModal" onclick="openAddMasterEmpModal()">
+                                <i class="fas fa-user-plus me-1"></i> เพิ่มพนักงานใหม่
+                            </button>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="table-responsive border rounded">
+                                <table class="table table-bordered table-hover align-middle text-center mb-0 bg-white">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Code</th>
+                                            <th>Name</th>
+                                            <th>Surname</th>
+                                            <th>Section</th>
+                                            <th>Shift</th>
+                                            <th>Position</th>
+                                            <th>จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="masterEmpTableBody">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: WORKING DAYS SETTING -->
+                <div id="tabWorkingDays" class="tab-content-section d-none">
+                    <div class="card mb-3">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0 text-primary fs-6 fw-bold"><i class="fas fa-calendar-alt me-2"></i>ข้อมูลวันทำงานแต่ละเดือน (Working Days)</h5>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#workingDayModal" onclick="openAddWorkingDayModal()">
+                                <i class="fas fa-plus me-1"></i> เพิ่มเดือนใหม่
+                            </button>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="table-responsive border rounded">
+                                <table class="table table-bordered table-hover align-middle text-center mb-0 bg-white">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>เดือน / ปี</th>
+                                            <th>จำนวนวันทำงาน (Days)</th>
+                                            <th>จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="workingDaysTableBody">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: DEPT OBG SETTING -->
+                <div id="tabDeptOBG" class="tab-content-section d-none">
+                    <div class="card mb-3">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0 text-primary fs-6 fw-bold"><i class="fas fa-building me-2"></i>ตั้งค่า OBG (Budget) และ Ratio แยกตามแผนก</h5>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#deptObgModal" onclick="openAddDeptObgModal()">
+                                <i class="fas fa-plus me-1"></i> เพิ่มข้อมูล OBG แผนก
+                            </button>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="table-responsive border rounded">
+                                <table class="table table-bordered table-hover align-middle text-center mb-0 bg-white">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>รอบเดือน</th>
+                                            <th>แผนก (Section)</th>
+                                            <th>เป้าหมาย OBG (ชั่วโมงรวม)</th>
+                                            <th>Ratio H/M/D (กำหนดเอง)</th>
+                                            <th>จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="deptObgTableBody">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Add / Edit Employee OT Record) -->
+    <div class="modal fade" id="employeeModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalTitle">บันทึกเวลา OT รายวันพนักงาน</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="employeeForm">
+                        <input type="hidden" id="editIndex">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empCodeSelect" class="form-label small">รหัสพนักงาน (Code)</label>
+                                <select class="form-select form-select-sm" id="empCodeSelect" onchange="onEmployeeCodeChange()" required>
+                                    <option value="">-- เลือกรหัสพนักงาน --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empName" class="form-label small">ชื่อ (Name)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="empName" readonly required>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empSurname" class="form-label small">นามสกุล (Surname)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="empSurname" readonly required>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empSection" class="form-label small">แผนก (Section)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="empSection" readonly required>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empShift" class="form-label small">กะ (Shift)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="empShift" readonly required>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="empPosition" class="form-label small">ตำแหน่ง (Position)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="empPosition" readonly required>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label for="modalMonthSelect" class="form-label small">ประจำเดือน (Month)</label>
+                                <select class="form-select form-select-sm" id="modalMonthSelect">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="text-primary fw-bold fs-6 mb-0">บันทึกชั่วโมง OT Plan, Actual และ Detail รายวัน (วันที่ 1 - 31)</h6>
+                            <span class="text-muted small d-none d-md-inline"><i class="fas fa-arrows-alt-h me-1"></i>เลื่อนขวา-ซ้ายเพื่อดูครบทุกวัน</span>
+                        </div>
+                        
+                        <div class="table-responsive border rounded mb-3" style="max-height: 280px;">
+                            <table class="table table-sm table-bordered text-center align-middle mb-0 bg-white" style="font-size: 0.85rem; min-width: 1500px;">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 120px; position: sticky; left: 0; z-index: 2; background: #f8f9fa;">ประเภทข้อมูล</th>
+                                        <script>
+                                            for (let i = 1; i <= 31; i++) {
+                                                document.write(`<th>${i}</th>`);
+                                            }
+                                        </script>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold bg-light" style="position: sticky; left: 0; z-index: 1; background: #f8f9fa;">OT Plan (ชม.)</td>
+                                        <script>
+                                            for (let i = 1; i <= 31; i++) {
+                                                document.write(`<td><input type="number" step="0.5" min="0" class="form-control form-control-sm p-0 text-center plan-day" id="plan_${i}" value="0" oninput="calculateTotals()" style="width: 50px; min-width: 50px;"></td>`);
+                                            }
+                                        </script>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold bg-light" style="position: sticky; left: 0; z-index: 1; background: #f8f9fa;">Act OT (ชม.)</td>
+                                        <script>
+                                            for (let i = 1; i <= 31; i++) {
+                                                document.write(`<td><input type="number" step="0.5" min="0" class="form-control form-control-sm p-0 text-center act-day" id="act_${i}" value="0" oninput="calculateTotals()" style="width: 50px; min-width: 50px;"></td>`);
+                                            }
+                                        </script>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold bg-light" style="position: sticky; left: 0; z-index: 1; background: #f8f9fa;">Detail (เหตุผล)</td>
+                                        <script>
+                                            for (let i = 1; i <= 31; i++) {
+                                                document.write(`<td><input type="text" class="form-control form-control-sm p-0 text-center detail-day" id="detail_${i}" placeholder="-" style="width: 50px; min-width: 50px;" title="เหตุผลวันที่ ${i}"></td>`);
+                                            }
+                                        </script>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="row g-2 mt-2">
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 bg-light border rounded">
+                                    <span class="small text-muted fw-semibold d-block">รวมชั่วโมง OT Plan (Budget):</span>
+                                    <input type="number" step="0.1" min="0" class="form-control form-control-sm mt-1 fw-bold text-primary" id="empBudget" value="0">
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 bg-light border rounded">
+                                    <span class="small text-muted fw-semibold d-block">รวมชั่วโมง Feas. Plan:</span>
+                                    <input type="number" step="0.1" class="form-control form-control-sm mt-1 fw-bold text-dark bg-light" id="empFeas" value="0" readonly>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 bg-light border rounded">
+                                    <span class="small text-muted d-block">รวมชั่วโมง Act OT (Actual):</span>
+                                    <h5 class="mb-0 text-success fw-bold mt-1" id="sumActDisplay">0.0</h5>
+                                    <input type="hidden" id="empActual" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveEmployee()">บันทึกข้อมูลพนักงาน</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Master Employee) -->
+    <div class="modal fade" id="masterEmpModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 fw-bold" id="masterEmpModalTitle">เพิ่มข้อมูลพนักงาน</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="masterEmpForm">
+                        <input type="hidden" id="masterEmpEditIndex">
+                        <div class="mb-3">
+                            <label for="masterCode" class="form-label small">รหัสพนักงาน (Code)</label>
+                            <input type="text" class="form-control form-control-sm" id="masterCode" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label for="masterName" class="form-label small">ชื่อ (Name)</label>
+                                <input type="text" class="form-control form-control-sm" id="masterName" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label for="masterSurname" class="form-label small">นามสกุล (Surname)</label>
+                                <input type="text" class="form-control form-control-sm" id="masterSurname" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="masterSection" class="form-label small">แผนก (Section)</label>
+                            <select class="form-select form-select-sm" id="masterSection" required>
+                                <option value="Production Control Admin">Production Control Admin</option>
+                                <option value="Production Operation Control 1">Production Operation Control 1</option>
+                                <option value="Production Operation Control 2">Production Operation Control 2</option>
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label for="masterShift" class="form-label small">กะ (Shift)</label>
+                                <select class="form-select form-select-sm" id="masterShift">
+                                    <option value="Day">Day</option>
+                                    <option value="Night">Night</option>
+                                </select>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label for="masterPosition" class="form-label small">ตำแหน่ง (Position)</label>
+                                <input type="text" class="form-control form-control-sm" id="masterPosition" value="Officer" required>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveMasterEmployee()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Working Days) -->
+    <div class="modal fade" id="workingDayModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 fw-bold" id="wdModalTitle">ตั้งค่าวันทำงาน</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="workingDayForm">
+                        <input type="hidden" id="wdEditIndex">
+                        <div class="mb-3">
+                            <label for="wdMonth" class="form-label small">ชื่อเดือน / ปี (เช่น October 2026)</label>
+                            <input type="text" class="form-control form-control-sm" id="wdMonth" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="wdDays" class="form-label small">จำนวนวันทำงาน (Days)</label>
+                            <input type="number" class="form-control form-control-sm" id="wdDays" value="19" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveWorkingDay()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Dept OBG & Ratio) -->
+    <div class="modal fade" id="deptObgModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 fw-bold" id="deptObgModalTitle">ตั้งค่า OBG และ Ratio แผนก</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="deptObgForm">
+                        <input type="hidden" id="deptObgEditIndex">
+                        <div class="mb-3">
+                            <label for="deptObgMonth" class="form-label small">รอบเดือน</label>
+                            <select class="form-select form-select-sm" id="deptObgMonth">
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="deptObgSection" class="form-label small">แผนก (Section)</label>
+                            <select class="form-select form-select-sm" id="deptObgSection">
+                                <option value="Production Control Admin">Production Control Admin</option>
+                                <option value="Production Operation Control 1">Production Operation Control 1</option>
+                                <option value="Production Operation Control 2">Production Operation Control 2</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="deptObgHours" class="form-label small">เป้าหมาย OBG (ชั่วโมงรวม)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="deptObgHours" value="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="deptObgRatio" class="form-label small">Ratio H/M/D (กำหนดเอง - ถ้าเว้นว่างจะคำนวณอัตโนมัติ)</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm" id="deptObgRatio" placeholder="เช่น 0.92">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveDeptObg()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Supabase JS Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Supabase configuration
+        const SUPABASE_URL = 'https://cdpwekpptpuhrauvfkqf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcHdla3BwdHB1aHJhdXZma3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDEwMTAsImV4cCI6MjEwNTU3NzAxMH0.ddg9AK_asgtMoZ1QSB__1v3MZNGPG4MWsHslAzY_hmA';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let masterEmployeeDirectory = [];
+        let employees = [];
+        let workingDaysList = [];
+        let deptObgList = [];
+        
+        let barChartInstance = null;
+        let pieChartInstance = null;
+        let empChartInstance = null;
+
+        // Load all data from Supabase with safe fallback and error handling
+        async function loadAllDataFromSupabase() {
+            try {
+                const { data: masterData, error: masterError } = await _supabase.from('master_employees').select('*');
+                if (masterError) console.error('master_employees error:', masterError);
+                masterEmployeeDirectory = masterData || [];
+
+                const { data: employeeData, error: employeeError } = await _supabase.from('employees_daily').select('*');
+                if (employeeError) console.error('employees_daily error:', employeeError);
+                employees = employeeData || [];
+
+                const { data: workingData, error: workingError } = await _supabase.from('working_days').select('*');
+                if (workingError) console.error('working_days error:', workingError);
+                workingDaysList = workingData || [];
+
+                const { data: obgData, error: obgError } = await _supabase.from('dept_obgs').select('*');
+                if (obgError) console.error('dept_obgs error:', obgError);
+                deptObgList = obgData || [];
+
+                renderMonthDropdowns();
+                renderDashboard();
+                renderTable();
+                renderMasterEmpTable();
+                renderWorkingDaysTable();
+                renderDeptObgTable();
+            } catch (err) {
+                console.error('Supabase Connection Error:', err);
+            }
+        }
+
+        function getCurrentWorkingDays() {
+            const select = document.getElementById('globalMonthSelect');
+            if (!select || select.value === "ALL" || !select.value) return 19;
+            const found = workingDaysList.find(w => w.month === select.value);
+            return found ? Number(found.days) : 19;
+        }
+
+        function getSelectedMonth() {
+            const select = document.getElementById('globalMonthSelect');
+            return select ? select.value : "ALL";
+        }
+
+        function renderMonthDropdowns() {
+            const globalSelect = document.getElementById('globalMonthSelect');
+            const modalSelect = document.getElementById('modalMonthSelect');
+            const deptObgMonthSelect = document.getElementById('deptObgMonth');
+            
+            if(!globalSelect || !modalSelect || !deptObgMonthSelect) return;
+
+            const gVal = globalSelect.value;
+            const mVal = modalSelect.value;
+            const dVal = deptObgMonthSelect.value;
+
+            globalSelect.innerHTML = '';
+            modalSelect.innerHTML = '';
+            deptObgMonthSelect.innerHTML = '';
+            
+            const allOpt = document.createElement('option');
+            allOpt.value = "ALL";
+            allOpt.textContent = "📊 ข้อมูลทั้งหมด (ทุกเดือน)";
+            globalSelect.appendChild(allOpt);
+
+            workingDaysList.forEach(w => {
+                const opt1 = document.createElement('option');
+                opt1.value = w.month;
+                opt1.textContent = `${w.month} (${w.days} วัน)`;
+                globalSelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = w.month;
+                opt2.textContent = w.month;
+                modalSelect.appendChild(opt2);
+
+                const opt3 = document.createElement('option');
+                opt3.value = w.month;
+                opt3.textContent = w.month;
+                deptObgMonthSelect.appendChild(opt3);
+            });
+
+            if (gVal && (gVal === "ALL" || workingDaysList.some(w => w.month === gVal))) {
+                globalSelect.value = gVal;
+            } else {
+                globalSelect.value = "ALL";
+            }
+
+            if (mVal && workingDaysList.some(w => w.month === mVal)) modalSelect.value = mVal;
+            if (dVal && workingDaysList.some(w => w.month === dVal)) deptObgMonthSelect.value = dVal;
+        }
+
+        function renderEmployeeCodeDropdown() {
+            const codeSelect = document.getElementById('empCodeSelect');
+            if(!codeSelect) return;
+            const currentVal = codeSelect.value;
+            codeSelect.innerHTML = '<option value="">-- เลือกรหัสพนักงาน --</option>';
+
+            masterEmployeeDirectory.forEach(emp => {
+                const opt = document.createElement('option');
+                opt.value = emp.code;
+                opt.textContent = `${emp.code} - ${emp.name} ${emp.surname}`;
+                codeSelect.appendChild(opt);
+            });
+
+            if (currentVal) codeSelect.value = currentVal;
+        }
+
+        function onEmployeeCodeChange() {
+            const codeSelect = document.getElementById('empCodeSelect');
+            const selectedCode = codeSelect.value;
+            
+            const found = masterEmployeeDirectory.find(e => e.code === selectedCode);
+            if (found) {
+                document.getElementById('empName').value = found.name;
+                document.getElementById('empSurname').value = found.surname;
+                document.getElementById('empSection').value = found.section;
+                document.getElementById('empShift').value = found.shift || 'Day';
+                document.getElementById('empPosition').value = found.position || 'Officer';
+            } else {
+                document.getElementById('empName').value = '';
+                document.getElementById('empSurname').value = '';
+                document.getElementById('empSection').value = '';
+                document.getElementById('empShift').value = '';
+                document.getElementById('empPosition').value = '';
+            }
+        }
+
+        function onMonthChange() {
+            renderDashboard();
+            renderTable();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('mobile-show');
+            overlay.classList.toggle('show');
+        }
+
+        function switchTab(tabName) {
+            const tabDash = document.getElementById('tabDashboard');
+            const tabCrud = document.getElementById('tabCrud');
+            const tabMasterEmp = document.getElementById('tabMasterEmp');
+            const tabWD = document.getElementById('tabWorkingDays');
+            const tabDeptOBG = document.getElementById('tabDeptOBG');
+            const pageTitle = document.getElementById('pageTitle');
+            
+            document.querySelectorAll('#sidebar .sidebar-menu li').forEach(li => li.classList.remove('active'));
+
+            tabDash.classList.add('d-none');
+            tabCrud.classList.add('d-none');
+            tabMasterEmp.classList.add('d-none');
+            tabWD.classList.add('d-none');
+            tabDeptOBG.classList.add('d-none');
+
+            if (window.innerWidth <= 992) {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                sidebar.classList.remove('mobile-show');
+                overlay.classList.remove('show');
+            }
+
+            if (tabName === 'dashboard') {
+                tabDash.classList.remove('d-none');
+                pageTitle.innerText = "แดชบอร์ดภาพรวมชั่วโมงการทำงาน";
+                document.getElementById('menu-dashboard').classList.add('active');
+                setTimeout(() => renderDashboard(), 50); // Small timeout to ensure container is visible for Chart.js
+            } else if (tabName === 'crud') {
+                tabCrud.classList.remove('d-none');
+                pageTitle.innerText = "บันทึกเวลา OT รายวันของพนักงาน";
+                document.getElementById('menu-crud').classList.add('active');
+                renderTable();
+            } else if (tabName === 'masteremp') {
+                tabMasterEmp.classList.remove('d-none');
+                pageTitle.innerText = "ข้อมูลพนักงาน (Master Directory)";
+                document.getElementById('menu-masteremp').classList.add('active');
+                renderMasterEmpTable();
+            } else if (tabName === 'workingdays') {
+                tabWD.classList.remove('d-none');
+                pageTitle.innerText = "ตั้งค่าวันทำงานรายเดือน";
+                document.getElementById('menu-workingdays').classList.add('active');
+                renderWorkingDaysTable();
+            } else if (tabName === 'deptobg') {
+                tabDeptOBG.classList.remove('d-none');
+                pageTitle.innerText = "ตั้งค่า OBG แยกตามแผนก";
+                document.getElementById('menu-deptobg').classList.add('active');
+                renderDeptObgTable();
+            }
+        }
+
+        function calculateTotals() {
+            let totalPlan = 0;
+            let totalAct = 0;
+            for(let i=1; i<=31; i++) {
+                let p = parseFloat(document.getElementById(`plan_${i}`).value) || 0;
+                let a = parseFloat(document.getElementById(`act_${i}`).value) || 0;
+                totalPlan += p;
+                totalAct += a;
+            }
+            document.getElementById('empBudget').value = totalPlan.toFixed(1);
+            document.getElementById('empFeas').value = totalPlan.toFixed(1);
+            
+            document.getElementById('sumActDisplay').innerText = totalAct.toFixed(1);
+            document.getElementById('empActual').value = totalAct;
+        }
+
+        function renderDashboard() {
+            const currentMonth = getSelectedMonth();
+            const sections = ["Production Control Admin", "Production Operation Control 1", "Production Operation Control 2"];
+            const container = document.getElementById('summaryCards');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const WORKING_DAYS = getCurrentWorkingDays();
+            const monthEmps = (currentMonth === "ALL") 
+                ? employees 
+                : employees.filter(e => !e.month || e.month === currentMonth);
+
+            let totalMembers = monthEmps.length;
+            let totalBudget = 0;
+
+            if (currentMonth === "ALL") {
+                sections.forEach(sec => {
+                    workingDaysList.forEach(w => {
+                        const foundObg = deptObgList.find(d => d.month === w.month && d.section === sec);
+                        if (foundObg) {
+                            totalBudget += Number(foundObg.hours);
+                        } else {
+                            totalBudget += employees.filter(e => e.month === w.month && e.section === sec).reduce((s, e) => s + Number(e.budget), 0);
+                        }
+                    });
+                });
+            } else {
+                sections.forEach(sec => {
+                    const foundObg = deptObgList.find(d => d.month === currentMonth && d.section === sec);
+                    totalBudget += foundObg ? Number(foundObg.hours) : monthEmps.filter(e => e.section === sec).reduce((s, e) => s + Number(e.budget), 0);
+                });
+            }
+
+            let totalActual = monthEmps.reduce((sum, e) => sum + Number(e.actual), 0);
+            
+            let totalRatioOBG = totalMembers > 0 ? (totalBudget / (WORKING_DAYS * totalMembers)) : 0;
+            let totalRatioAct = totalMembers > 0 ? (totalActual / (WORKING_DAYS * totalMembers)) : 0;
+
+            let cardTitleText = currentMonth === "ALL" ? "PC Dept. (ทุกเดือน)" : `PC Dept. (${currentMonth})`;
+
+            let html = `
+                <div class="col-12 col-sm-6 col-xl-3">
+                    <div class="card bg-primary text-white p-3 shadow-sm h-100">
+                        <h6 class="text-uppercase small fw-semibold text-white-50">${cardTitleText}</h6>
+                        <h3 class="mb-0 fw-bold">${totalMembers} <span class="fs-6 fw-normal">รายการ/คน</span></h3>
+                        <hr class="my-2 opacity-50">
+                        <div class="d-flex justify-content-between small">
+                            <span>OBG Target: ${totalBudget.toFixed(1)}</span>
+                            <span>Act: ${totalActual.toFixed(1)}</span>
+                        </div>
+                        <div class="mt-2 pt-1 border-top border-light border-opacity-25 small">
+                            <div class="d-flex justify-content-between"><span>Ratio (OBG):</span><strong>${totalRatioOBG.toFixed(2)}</strong></div>
+                            <div class="d-flex justify-content-between"><span>Ratio (Act):</span><strong>${totalRatioAct.toFixed(2)}</strong></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            let secBudgets = [];
+            let secActuals = [];
+            let secMemberCounts = [];
+            let shortLabels = ["PC Admin", "POC 1", "POC 2"];
+
+            sections.forEach((sec) => {
+                const secEmps = monthEmps.filter(e => e.section === sec);
+                const mCount = secEmps.length;
+                
+                let bSum = 0;
+                if (currentMonth === "ALL") {
+                    workingDaysList.forEach(w => {
+                        const foundObg = deptObgList.find(d => d.month === w.month && d.section === sec);
+                        if (foundObg) {
+                            bSum += Number(foundObg.hours);
+                        } else {
+                            bSum += employees.filter(e => e.month === w.month && e.section === sec).reduce((s, e) => s + Number(e.budget), 0);
+                        }
+                    });
+                } else {
+                    const foundObg = deptObgList.find(d => d.month === currentMonth && d.section === sec);
+                    bSum = foundObg ? Number(foundObg.hours) : secEmps.reduce((s, e) => s + Number(e.budget), 0);
+                }
+
+                const aSum = secEmps.reduce((s, e) => s + Number(e.actual), 0);
+                
+                let ratioOBG = (mCount > 0) ? (bSum / (WORKING_DAYS * mCount)) : 0;
+                const ratioAct = (mCount > 0) ? (aSum / (WORKING_DAYS * mCount)) : 0;
+
+                secBudgets.push(bSum);
+                secActuals.push(aSum);
+                secMemberCounts.push(mCount);
+
+                html += `
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="card bg-white border p-3 shadow-sm h-100">
+                            <h6 class="text-muted small fw-semibold text-truncate" title="${sec}">${sec}</h6>
+                            <h3 class="mb-0 text-dark fw-bold">${mCount} <span class="fs-6 text-muted fw-normal">รายการ</span></h3>
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-between small text-muted">
+                                <span>OBG Target: ${bSum.toFixed(1)}</span>
+                                <span>Act: ${aSum.toFixed(1)}</span>
+                            </div>
+                            <div class="mt-2 pt-1 border-top small">
+                                <div class="d-flex justify-content-between text-primary"><span>Ratio (OBG):</span><strong>${ratioOBG.toFixed(2)}</strong></div>
+                                <div class="d-flex justify-content-between text-success"><span>Ratio (Act):</span><strong>${ratioAct.toFixed(2)}</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            renderCharts(shortLabels, secBudgets, secActuals, secMemberCounts, monthEmps);
+        }
+
+        function renderCharts(labels, budgets, actuals, memberCounts, monthEmps) {
+            const ctxBar = document.getElementById('barChart');
+            if (!ctxBar) return;
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(ctxBar.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'OBG Target', data: budgets, backgroundColor: '#3b82f6', borderRadius: 4 },
+                        { label: 'Actual', data: actuals, backgroundColor: '#10b981', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Anuphan' } } } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+            pieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: memberCounts,
+                        backgroundColor: ['#3b82f6', '#f59e0b', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Anuphan' } } } }
+                }
+            });
+
+            const empNames = monthEmps.map(e => `${e.name} (${e.code})`);
+            const empFeas = monthEmps.map(e => Number(e.feas) || 0);
+            const empActuals = monthEmps.map(e => Number(e.actual) || 0);
+
+            const ctxEmp = document.getElementById('employeeEmpChart').getContext('2d');
+            if (empChartInstance) empChartInstance.destroy();
+            empChartInstance = new Chart(ctxEmp, {
+                type: 'bar',
+                data: {
+                    labels: empNames.length > 0 ? empNames : ['ไม่มีข้อมูลพนักงาน'],
+                    datasets: [
+                        { label: 'Feas. Plan', data: empFeas.length > 0 ? empFeas : [0], backgroundColor: '#f59e0b', borderRadius: 4 },
+                        { label: 'Actual (Total)', data: empActuals.length > 0 ? empActuals : [0], backgroundColor: '#06b6d4', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Anuphan' } } } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderTable() {
+            const currentMonth = getSelectedMonth();
+            const searchInput = document.getElementById('searchInput');
+            const filterSection = document.getElementById('filterSection');
+            const tbody = document.getElementById('employeeTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const search = searchInput ? searchInput.value.toLowerCase() : '';
+            const filterSec = filterSection ? filterSection.value : '';
+            const WORKING_DAYS = getCurrentWorkingDays();
+
+            const filtered = employees.filter((emp, index) => {
+                const matchMonth = (currentMonth === "ALL") || !emp.month || emp.month === currentMonth;
+                const matchSearch = (emp.code + emp.name + emp.surname).toLowerCase().includes(search);
+                const matchSec = filterSec === "" || emp.section === filterSec;
+                emp.origIndex = index;
+                return matchMonth && matchSearch && matchSec;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="13" class="text-muted py-4">ไม่พบข้อมูลพนักงาน</td></tr>`;
+                return;
+            }
+
+            const monthEmps = (currentMonth === "ALL") ? employees : employees.filter(e => !e.month || e.month === currentMonth);
+            const sectionStats = {};
+            ["Production Control Admin", "Production Operation Control 1", "Production Operation Control 2"].forEach(sec => {
+                const foundObg = deptObgList.find(d => d.month === currentMonth && d.section === sec);
+                const secEmps = monthEmps.filter(e => e.section === sec);
+                
+                const totalBudget = foundObg ? Number(foundObg.hours) : secEmps.reduce((s, e) => s + Number(e.budget), 0);
+                const count = secEmps.length;
+
+                let ratioOBG = (foundObg && foundObg.ratio !== "" && !isNaN(foundObg.ratio)) 
+                    ? Number(foundObg.ratio) 
+                    : (count > 0 ? (totalBudget / (WORKING_DAYS * count)) : 0);
+
+                sectionStats[sec] = {
+                    count: count,
+                    totalBudget: totalBudget,
+                    totalActual: secEmps.reduce((s, e) => s + Number(e.actual), 0),
+                    ratioOBG: ratioOBG
+                };
+            });
+
+            filtered.forEach(emp => {
+                const diff = (Number(emp.budget) - Number(emp.actual)).toFixed(1);
+                const diffClass = diff < 0 ? 'text-danger' : (diff > 0 ? 'text-success' : '');
+                
+                const secInfo = sectionStats[emp.section] || { ratioOBG: 0, totalActual: 0 };
+                const count = secInfo.count > 0 ? secInfo.count : 1;
+                const ratioOBG = secInfo.ratioOBG;
+                const ratioAct = secInfo.totalActual / (WORKING_DAYS * count);
+                
+                let detailSummary = '-';
+                if (emp.detail_days && Array.isArray(emp.detail_days)) {
+                    let detailsArr = [];
+                    emp.detail_days.forEach((d, idx) => {
+                        if (d && d.trim() !== "") {
+                            detailsArr.push(`ว.${idx+1}: ${d}`);
+                        }
+                    });
+                    if (detailsArr.length > 0) {
+                        detailSummary = detailsArr.join(', ');
+                    }
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span class="badge bg-dark">${emp.month || 'ตุลาคม'}</span></td>
+                    <td><code class="font-monospace">${emp.code}</code></td>
+                    <td class="text-start">${emp.name} ${emp.surname}</td>
+                    <td><span class="badge bg-secondary badge-section">${emp.section}</span></td>
+                    <td>${emp.shift} / ${emp.position}</td>
+                    <td>${Number(emp.budget).toFixed(1)}</td>
+                    <td>${Number(emp.feas).toFixed(1)}</td>
+                    <td>${Number(emp.actual).toFixed(1)}</td>
+                    <td class="${diffClass} fw-bold">${diff}</td>
+                    <td><span class="badge bg-light text-primary border">${ratioOBG.toFixed(2)}</span></td>
+                    <td><span class="badge bg-light text-success border">${ratioAct.toFixed(2)}</span></td>
+                    <td class="text-start text-muted small" style="max-width: 200px; word-break: break-word;">${detailSummary}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" onclick="openEditModal(${emp.origIndex})" title="แก้ไข"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEmployee(${emp.origIndex})" title="ลบ"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderMasterEmpTable() {
+            const tbody = document.getElementById('masterEmpTableBody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            masterEmployeeDirectory.forEach((emp, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><code class="font-monospace">${emp.code}</code></td>
+                    <td class="text-start">${emp.name}</td>
+                    <td class="text-start">${emp.surname}</td>
+                    <td><span class="badge bg-secondary badge-section">${emp.section}</span></td>
+                    <td>${emp.shift || 'Day'}</td>
+                    <td>${emp.position}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" onclick="openEditMasterEmpModal(${index})" title="แก้ไข"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteMasterEmployee(${index})" title="ลบ"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderWorkingDaysTable() {
+            const tbody = document.getElementById('workingDaysTableBody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            workingDaysList.forEach((wd, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-semibold">${wd.month}</td>
+                    <td>${wd.days} วัน</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" onclick="openEditWorkingDayModal(${index})" title="แก้ไข"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteWorkingDay(${index})" title="ลบ"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderDeptObgTable() {
+            const tbody = document.getElementById('deptObgTableBody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            deptObgList.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-semibold">${item.month}</td>
+                    <td><span class="badge bg-secondary badge-section">${item.section}</span></td>
+                    <td><strong>${Number(item.hours).toFixed(1)}</strong> ชั่วโมง</td>
+                    <td><span class="badge bg-light text-dark border">${item.ratio !== "" && item.ratio !== null ? Number(item.ratio).toFixed(2) : '(คำนวณอัตโนมัติ)'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" onclick="openEditDeptObgModal(${index})" title="แก้ไข"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteDeptObg(${index})" title="ลบ"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function exportToExcel() {
+            let dataToExport = employees.map((emp, idx) => {
+                let row = {
+                    "No.": idx + 1,
+                    "Month": emp.month || "October 2026",
+                    "Code": emp.code,
+                    "Name": emp.name,
+                    "Surname": emp.surname,
+                    "Section": emp.section,
+                    "Shift": emp.shift,
+                    "Position": emp.position,
+                    "OT Plan (Budget)": emp.budget,
+                    "Feas. Plan": emp.feas,
+                    "Actual (Total)": emp.actual
+                };
+                let pDays = emp.plan_days || [];
+                let aDays = emp.act_days || [];
+                let dDays = emp.detail_days || [];
+                for(let i=1; i<=31; i++) {
+                    row[`Plan D${i}`] = pDays[i-1] || 0;
+                    row[`Act D${i}`] = aDays[i-1] || 0;
+                    row[`Detail D${i}`] = dDays[i-1] || "";
+                }
+                return row;
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "OT_Records");
+            XLSX.writeFile(workbook, "OT_Plan_Records.xlsx");
+        }
+
+        async function importFromExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (json.length === 0) {
+                        return;
+                    }
+
+                    let rowsToInsert = [];
+                    json.forEach(row => {
+                        let code = String(row["Code"] || row["รหัส"] || "").trim();
+                        let month = String(row["Month"] || row["ประจำเดือน"] || "October 2026").trim();
+                        let name = String(row["Name"] || row["ชื่อ"] || "").trim();
+                        let surname = String(row["Surname"] || row["นามสกุล"] || "").trim();
+                        let section = String(row["Section"] || row["แผนก"] || "Production Control Admin").trim();
+                        let shift = String(row["Shift"] || row["กะ"] || "Day").trim();
+                        let position = String(row["Position"] || row["ตำแหน่ง"] || "Officer").trim();
+                        let budget = parseFloat(row["OT Plan (Budget)"] || row["Budget"] || 0) || 0;
+                        let feas = parseFloat(row["Feas. Plan"] || row["Feas"] || 0) || 0;
+                        let actual = parseFloat(row["Actual (Total)"] || row["Actual"] || 0) || 0;
+
+                        let planDays = [];
+                        let actDays = [];
+                        let detailDays = [];
+                        for(let i=1; i<=31; i++) {
+                            planDays.push(parseFloat(row[`Plan D${i}`] || 0) || 0);
+                            actDays.push(parseFloat(row[`Act D${i}`] || 0) || 0);
+                            detailDays.push(String(row[`Detail D${i}`] || "").trim());
+                        }
+
+                        if (code && name) {
+                            rowsToInsert.push({
+                                code, name, surname, section, shift, position, month, budget, feas, actual,
+                                plan_days: planDays, act_days: actDays, detail_days: detailDays
+                            });
+                        }
+                    });
+
+                    const { error } = await _supabase.from('employees_daily').insert(rowsToInsert);
+                    if (error) throw error;
+
+                    await loadAllDataFromSupabase();
+                } catch (err) {
+                    console.error(err);
+                }
+                event.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function openAddMasterEmpModal() {
+            document.getElementById('masterEmpModalTitle').innerText = 'เพิ่มข้อมูลพนักงานใหม่';
+            document.getElementById('masterEmpForm').reset();
+            document.getElementById('masterEmpEditIndex').value = '';
+        }
+
+        function openEditMasterEmpModal(index) {
+            document.getElementById('masterEmpModalTitle').innerText = 'แก้ไขข้อมูลพนักงาน';
+            const emp = masterEmployeeDirectory[index];
+            document.getElementById('masterEmpEditIndex').value = emp.id;
+            document.getElementById('masterCode').value = emp.code;
+            document.getElementById('masterName').value = emp.name;
+            document.getElementById('masterSurname').value = emp.surname;
+            document.getElementById('masterSection').value = emp.section;
+            document.getElementById('masterShift').value = emp.shift || 'Day';
+            document.getElementById('masterPosition').value = emp.position;
+
+            var myModal = new bootstrap.Modal(document.getElementById('masterEmpModal'));
+            myModal.show();
+        }
+
+        async function saveMasterEmployee() {
+            const idVal = document.getElementById('masterEmpEditIndex').value;
+            const codeVal = document.getElementById('masterCode').value.trim();
+            const nameVal = document.getElementById('masterName').value.trim();
+            const surnameVal = document.getElementById('masterSurname').value.trim();
+            const sectionVal = document.getElementById('masterSection').value;
+            const shiftVal = document.getElementById('masterShift').value;
+            const positionVal = document.getElementById('masterPosition').value.trim();
+
+            if (!codeVal || !nameVal || !surnameVal || !positionVal) return;
+
+            const dataObj = { code: codeVal, name: nameVal, surname: surnameVal, section: sectionVal, shift: shiftVal, position: positionVal };
+
+            if (idVal === "") {
+                const { error } = await _supabase.from('master_employees').insert([dataObj]);
+                if (error) return;
+            } else {
+                const { error } = await _supabase.from('master_employees').update(dataObj).eq('id', idVal);
+                if (error) return;
+            }
+
+            await loadAllDataFromSupabase();
+            bootstrap.Modal.getInstance(document.getElementById('masterEmpModal')).hide();
+        }
+
+        async function deleteMasterEmployee(index) {
+            const emp = masterEmployeeDirectory[index];
+            if (confirm(`คุณต้องการลบพนักงานรหัส ${emp.code} ใช่หรือไม่?`)) {
+                if (emp.id) {
+                    await _supabase.from('master_employees').delete().eq('id', emp.id);
+                }
+                await loadAllDataFromSupabase();
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = 'บันทึกเวลา OT รายวันพนักงาน';
+            document.getElementById('employeeForm').reset();
+            document.getElementById('editIndex').value = '';
+            
+            const selMonth = getSelectedMonth();
+            document.getElementById('modalMonthSelect').value = (selMonth === "ALL") ? (workingDaysList[0] ? workingDaysList[0].month : "October 2026") : selMonth;
+            
+            renderEmployeeCodeDropdown();
+            
+            for(let i=1; i<=31; i++) {
+                document.getElementById(`plan_${i}`).value = 0;
+                document.getElementById(`act_${i}`).value = 0;
+                document.getElementById(`detail_${i}`).value = '';
+            }
+            calculateTotals();
+        }
+
+        function openEditModal(index) {
+            document.getElementById('modalTitle').innerText = 'แก้ไขบันทึกเวลา OT รายวันพนักงาน';
+            const emp = employees[index];
+            document.getElementById('editIndex').value = emp.id;
+            renderEmployeeCodeDropdown();
+            document.getElementById('empCodeSelect').value = emp.code;
+            document.getElementById('empName').value = emp.name;
+            document.getElementById('empSurname').value = emp.surname;
+            document.getElementById('empSection').value = emp.section;
+            document.getElementById('empShift').value = emp.shift;
+            document.getElementById('empPosition').value = emp.position;
+            document.getElementById('modalMonthSelect').value = emp.month || "October 2026";
+            document.getElementById('empBudget').value = emp.budget || 0;
+            document.getElementById('empFeas').value = emp.feas || 0;
+
+            const planDays = emp.plan_days || Array(31).fill(0);
+            const actDays = emp.act_days || Array(31).fill(0);
+            const detailDays = emp.detail_days || Array(31).fill("");
+
+            for(let i=1; i<=31; i++) {
+                document.getElementById(`plan_${i}`).value = planDays[i-1] || 0;
+                document.getElementById(`act_${i}`).value = actDays[i-1] || 0;
+                document.getElementById(`detail_${i}`).value = detailDays[i-1] || "";
+            }
+            
+            let totalAct = actDays.reduce((s, a) => s + Number(a), 0);
+            document.getElementById('sumActDisplay').innerText = totalAct.toFixed(1);
+            document.getElementById('empActual').value = totalAct;
+
+            var myModal = new bootstrap.Modal(document.getElementById('employeeModal'));
+            myModal.show();
+        }
+
+        async function saveEmployee() {
+            const idVal = document.getElementById('editIndex').value;
+            const codeVal = document.getElementById('empCodeSelect').value;
+
+            if (!codeVal) return;
+            
+            let planDaysArr = [];
+            let actDaysArr = [];
+            let detailDaysArr = [];
+            for(let i=1; i<=31; i++) {
+                planDaysArr.push(parseFloat(document.getElementById(`plan_${i}`).value) || 0);
+                actDaysArr.push(parseFloat(document.getElementById(`act_${i}`).value) || 0);
+                detailDaysArr.push(document.getElementById(`detail_${i}`).value.trim());
+            }
+
+            const empData = {
+                code: codeVal,
+                name: document.getElementById('empName').value,
+                surname: document.getElementById('empSurname').value,
+                section: document.getElementById('empSection').value,
+                shift: document.getElementById('empShift').value,
+                position: document.getElementById('empPosition').value,
+                month: document.getElementById('modalMonthSelect').value,
+                budget: parseFloat(document.getElementById('empBudget').value) || 0,
+                feas: parseFloat(document.getElementById('empFeas').value) || 0,
+                actual: parseFloat(document.getElementById('empActual').value) || 0,
+                plan_days: planDaysArr,
+                act_days: actDaysArr,
+                detail_days: detailDaysArr
+            };
+
+            if (idVal === "") {
+                const { error } = await _supabase.from('employees_daily').insert([empData]);
+                if (error) return;
+            } else {
+                const { error } = await _supabase.from('employees_daily').update(empData).eq('id', idVal);
+                if (error) return;
+            }
+
+            await loadAllDataFromSupabase();
+            bootstrap.Modal.getInstance(document.getElementById('employeeModal')).hide();
+        }
+
+        async function deleteEmployee(index) {
+            const emp = employees[index];
+            if (confirm(`คุณต้องการลบข้อมูลของ ${emp.name} ${emp.surname} ใช่หรือไม่?`)) {
+                if (emp.id) {
+                    await _supabase.from('employees_daily').delete().eq('id', emp.id);
+                }
+                await loadAllDataFromSupabase();
+            }
+        }
+
+        function openAddWorkingDayModal() {
+            document.getElementById('wdModalTitle').innerText = 'เพิ่มวันทำงานรายเดือน';
+            document.getElementById('workingDayForm').reset();
+            document.getElementById('wdEditIndex').value = '';
+        }
+
+        function openEditWorkingDayModal(index) {
+            document.getElementById('wdModalTitle').innerText = 'แก้ไขวันทำงานรายเดือน';
+            const wd = workingDaysList[index];
+            document.getElementById('wdEditIndex').value = wd.id;
+            document.getElementById('wdMonth').value = wd.month;
+            document.getElementById('wdDays').value = wd.days;
+
+            var myModal = new bootstrap.Modal(document.getElementById('workingDayModal'));
+            myModal.show();
+        }
+
+        async function saveWorkingDay() {
+            const idVal = document.getElementById('wdEditIndex').value;
+            const monthName = document.getElementById('wdMonth').value.trim();
+            const daysVal = parseInt(document.getElementById('wdDays').value) || 0;
+
+            if (!monthName || daysVal <= 0) return;
+
+            const dataObj = { month: monthName, days: daysVal };
+
+            if (idVal === "") {
+                await _supabase.from('working_days').insert([dataObj]);
+            } else {
+                await _supabase.from('working_days').update(dataObj).eq('id', idVal);
+            }
+
+            await loadAllDataFromSupabase();
+            bootstrap.Modal.getInstance(document.getElementById('workingDayModal')).hide();
+        }
+
+        async function deleteWorkingDay(index) {
+            const wd = workingDaysList[index];
+            if (confirm(`คุณต้องการลบข้อมูลของเดือน ${wd.month} ใช่หรือไม่?`)) {
+                if (wd.id) {
+                    await _supabase.from('working_days').delete().eq('id', wd.id);
+                }
+                await loadAllDataFromSupabase();
+            }
+        }
+
+        function openAddDeptObgModal() {
+            document.getElementById('deptObgModalTitle').innerText = 'ตั้งค่า OBG และ Ratio แผนก';
+            document.getElementById('deptObgForm').reset();
+            document.getElementById('deptObgEditIndex').value = '';
+            document.getElementById('deptObgMonth').value = workingDaysList[0] ? workingDaysList[0].month : "October 2026";
+        }
+
+        function openEditDeptObgModal(index) {
+            document.getElementById('deptObgModalTitle').innerText = 'แก้ไข OBG และ Ratio แผนก';
+            const item = deptObgList[index];
+            document.getElementById('deptObgEditIndex').value = item.id;
+            document.getElementById('deptObgMonth').value = item.month;
+            document.getElementById('deptObgSection').value = item.section;
+            document.getElementById('deptObgHours').value = item.hours;
+            document.getElementById('deptObgRatio').value = item.ratio !== undefined && item.ratio !== null ? item.ratio : "";
+
+            var myModal = new bootstrap.Modal(document.getElementById('deptObgModal'));
+            myModal.show();
+        }
+
+        async function saveDeptObg() {
+            const idVal = document.getElementById('deptObgEditIndex').value;
+            const monthVal = document.getElementById('deptObgMonth').value;
+            const sectionVal = document.getElementById('deptObgSection').value;
+            const hoursVal = parseFloat(document.getElementById('deptObgHours').value) || 0;
+            const ratioVal = document.getElementById('deptObgRatio').value.trim();
+
+            if (!monthVal || !sectionVal) return;
+
+            const dataObj = { 
+                month: monthVal, 
+                section: sectionVal, 
+                hours: hoursVal, 
+                ratio: ratioVal === "" ? null : parseFloat(ratioVal) 
+            };
+
+            if (idVal === "") {
+                await _supabase.from('dept_obgs').insert([dataObj]);
+            } else {
+                await _supabase.from('dept_obgs').update(dataObj).eq('id', idVal);
+            }
+
+            await loadAllDataFromSupabase();
+            bootstrap.Modal.getInstance(document.getElementById('deptObgModal')).hide();
+        }
+
+        async function deleteDeptObg(index) {
+            const item = deptObgList[index];
+            if (confirm('คุณต้องการลบข้อมูลเป้าหมาย OBG นี้ใช่หรือไม่?')) {
+                if (item.id) {
+                    await _supabase.from('dept_obgs').delete().eq('id', item.id);
+                }
+                await loadAllDataFromSupabase();
+            }
+        }
+
+        window.onload = function() {
+            loadAllDataFromSupabase();
+        };
+    </script>
+</body>
+
+</html>
